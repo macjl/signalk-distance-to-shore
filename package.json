@@ -1,0 +1,60 @@
+{
+  "name": "signalk-distance-to-shore",
+  "version": "0.1.0",
+  "description": "Signal K plugin that publishes distance to the nearest known coastline.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm test",
+    "fetch:coastline": "node tools/fetch-osm-coastline.js",
+    "fetch:coastline:bbox": "node tools/fetch-overpass-coastline.js",
+    "build:coast-db": "node tools/build-coast-db.js"
+  },
+  "files": [
+    "index.js",
+    "lib",
+    "tools",
+    "public",
+    "data/coast-db",
+    "data/rough-antibes-v1.json",
+    "README.md",
+    "CHANGELOG.md",
+    "NOTICE.md"
+  ],
+  "keywords": [
+    "signalk-node-server-plugin",
+    "signalk-category-utility",
+    "signalk",
+    "navigation",
+    "coast",
+    "coastline",
+    "shore",
+    "distance",
+    "grounding",
+    "safety",
+    "openstreetmap"
+  ],
+  "author": "Jean-Laurent Girod (@macjl)",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/macjl/signalk-distance-to-shore#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/macjl/signalk-distance-to-shore.git"
+  },
+  "bugs": {
+    "url": "https://github.com/macjl/signalk-distance-to-shore/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "shapefile": "^0.6.6",
+    "yauzl": "^3.3.2"
+  },
+  "signalk-plugin-enabled-by-default": false,
+  "signalk": {
+    "displayName": "Distance To Shore",
+    "appIcon": "./public/icon.svg"
+  }
+}
