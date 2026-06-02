@@ -7,4 +7,6 @@
 - Publish distance to nearest coastline from `navigation.position`.
 - Publish closest shore position and bearing to closest shore.
 - Add OpenStreetMap coastline data build tools.
+- Add PMTiles/MVT runtime support for distance calculations.
+- Add a bundled French Mediterranean PMTiles chart resource for Freeboard.
 - Add npm and Signal K AppStore publishing metadata.

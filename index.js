@@ -1,15 +1,30 @@
 'use strict'
 
+const fs = require('fs')
+const path = require('path')
+const { PMTiles } = require('pmtiles')
 const { DEFAULT_DATA_PATH, loadCoastIndex } = require('./lib/coast-index')
 const { buildSchema } = require('./lib/plugin-schema')
 
 const PLUGIN_ID = 'distance-to-shore'
 const PUBLISH_SOURCE = 'signalk-distance-to-shore'
+const DEFAULT_CHART_PATH = path.join(__dirname, 'data', 'charts', 'french-mediterranean.pmtiles')
 
 const DEFAULT_OPTIONS = {
   enabled: true,
   inputPositionPath: 'navigation.position',
   dataPath: '',
+  pmtiles: {
+    layerName: 'coastline',
+    zoom: 12
+  },
+  charts: {
+    enabled: true,
+    path: '',
+    identifier: 'distance-to-shore-french-mediterranean',
+    name: 'Distance To Shore Coastline - French Mediterranean',
+    description: 'Coastline used by signalk-distance-to-shore for the French Mediterranean area.'
+  },
   tickIntervalMs: 1000,
   searchRadiusMeters: 10000,
   publishing: {
@@ -26,12 +41,16 @@ module.exports = function createPlugin (app) {
   let coastIndex = null
   let runtime = inactiveRuntime()
   let tickRunning = false
+  let chartResourceProviderRegistered = false
+  let chartResourcesPromise = Promise.resolve({})
+  let routerChartFiles = new Map()
 
   const plugin = {
     id: PLUGIN_ID,
     name: 'Distance To Shore',
     description: 'Publishes distance from navigation.position to the nearest known coastline.',
     schema: buildSchema,
+    registerWithRouter,
     start,
     stop
   }
@@ -49,7 +68,7 @@ module.exports = function createPlugin (app) {
     }
 
     try {
-      coastIndex = loadCoastIndex(options.dataPath || DEFAULT_DATA_PATH)
+      coastIndex = loadCoastIndex(options.dataPath || DEFAULT_DATA_PATH, options)
       runtime.dataSource = coastIndex.sourcePath
     } catch (error) {
       runtime.status = 'error'
@@ -59,6 +78,8 @@ module.exports = function createPlugin (app) {
       return
     }
 
+    registerChartResourceProvider()
+    chartResourcesPromise = buildChartResources()
     tick()
     timer = setInterval(() => { tick() }, options.tickIntervalMs)
     setStatus()
@@ -72,7 +93,7 @@ module.exports = function createPlugin (app) {
     setStatus()
   }
 
-  function tick () {
+  async function tick () {
     if (tickRunning || !coastIndex) return
     tickRunning = true
     try {
@@ -83,9 +104,12 @@ module.exports = function createPlugin (app) {
         return
       }
 
-      const nearest = coastIndex.findNearest(position, {
+      const nearestResult = coastIndex.findNearest(position, {
         searchRadiusMeters: options.searchRadiusMeters
       })
+      const nearest = nearestResult && typeof nearestResult.then === 'function'
+        ? await nearestResult
+        : nearestResult
 
       if (!nearest) {
         runtime.status = 'outOfRange'
@@ -111,6 +135,74 @@ module.exports = function createPlugin (app) {
     } finally {
       tickRunning = false
     }
+  }
+
+  function registerWithRouter (router) {
+    router.get('/charts', async (req, res) => {
+      const resources = await chartResourcesPromise
+      res.json(Object.values(resources).map((resource) => resource.identifier))
+    })
+
+    router.get('/charts/:fileName', async (req, res) => {
+      const resource = routerChartFiles.get(req.params.fileName)
+      if (!resource) {
+        res.status(404).json({ error: 'Chart not found' })
+        return
+      }
+      res.sendFile(resource.path)
+    })
+  }
+
+  function registerChartResourceProvider () {
+    if (chartResourceProviderRegistered || typeof app.registerResourceProvider !== 'function') return
+    app.registerResourceProvider({
+      type: 'charts',
+      methods: {
+        listResources: async () => chartResourcesPromise,
+        getResource: async (id) => {
+          const resources = await chartResourcesPromise
+          if (resources[id]) return resources[id]
+          throw new Error('Chart not found')
+        },
+        setResource: async () => {
+          throw new Error('Not implemented')
+        },
+        deleteResource: async () => {
+          throw new Error('Not implemented')
+        }
+      }
+    })
+    chartResourceProviderRegistered = true
+  }
+
+  async function buildChartResources () {
+    routerChartFiles = new Map()
+    if (!options.charts.enabled) return {}
+
+    const chartPath = path.resolve(options.charts.path || DEFAULT_CHART_PATH)
+    if (!fs.existsSync(chartPath)) return {}
+
+    const source = new LocalFileSource(chartPath)
+    const archive = new PMTiles(source)
+    const header = await archive.getHeader()
+    const metadata = await archive.getMetadata().catch(() => ({}))
+    const fileName = path.basename(chartPath)
+    const identifier = options.charts.identifier || fileName
+    const resource = {
+      identifier,
+      name: options.charts.name || metadata.name || fileName,
+      description: options.charts.description || metadata.description || '',
+      type: 'tilelayer',
+      minzoom: header.minZoom,
+      maxzoom: header.maxZoom,
+      bounds: [header.minLon, header.minLat, header.maxLon, header.maxLat],
+      format: 'pbf',
+      url: `/plugins/${PLUGIN_ID}/charts/${encodeURIComponent(fileName)}`,
+      layers: metadata.vector_layers || [],
+      attribution: metadata.attribution
+    }
+    routerChartFiles.set(fileName, { path: chartPath, resource })
+    return { [identifier]: resource }
   }
 
   function readPosition (path) {
@@ -179,6 +271,8 @@ function inactiveRuntime () {
 
 function mergeOptions (defaults, overrides) {
   const merged = { ...defaults, ...overrides }
+  merged.pmtiles = { ...defaults.pmtiles, ...(overrides.pmtiles || {}) }
+  merged.charts = { ...defaults.charts, ...(overrides.charts || {}) }
   merged.publishing = { ...defaults.publishing, ...(overrides.publishing || {}) }
   return merged
 }
@@ -193,4 +287,25 @@ function normalizeOptions (rawOptions) {
 
 function numberOr (value, fallback) {
   return Number.isFinite(value) ? value : fallback
+}
+
+class LocalFileSource {
+  constructor (filePath) {
+    this.filePath = filePath
+  }
+
+  getKey () {
+    return this.filePath
+  }
+
+  async getBytes (offset, length) {
+    const handle = await fs.promises.open(this.filePath, 'r')
+    try {
+      const buffer = Buffer.alloc(length)
+      const result = await handle.read(buffer, 0, length, offset)
+      return { data: buffer.subarray(0, result.bytesRead).buffer.slice(buffer.byteOffset, buffer.byteOffset + result.bytesRead) }
+    } finally {
+      await handle.close()
+    }
+  }
 }

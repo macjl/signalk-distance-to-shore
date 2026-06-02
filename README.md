@@ -34,6 +34,10 @@ Main options:
 
 - `inputPositionPath`: Signal K position path to read, default `navigation.position`
 - `dataPath`: custom coast database path; blank uses the bundled Mediterranean dataset
+- `pmtiles.layerName`: MVT layer name used when `dataPath` points to a PMTiles file, default `coastline`
+- `pmtiles.zoom`: MVT zoom used for distance calculations, default `12`
+- `charts.enabled`: publish a Signal K chart resource for Freeboard, default `true`
+- `charts.path`: PMTiles chart file path; blank uses the bundled French Mediterranean PMTiles file
 - `tickIntervalMs`: calculation interval, default `1000`
 - `searchRadiusMeters`: maximum coast search radius, default `10000`
 - `publishing.distancePath`: output distance path, default `navigation.distanceToShore`
@@ -72,6 +76,34 @@ Coordinates are stored as `[longitude, latitude]`. Each tile has a bounding box 
 
 The default dataset is `data/coast-db/mediterranean`, generated from the processed OpenStreetMap `natural=coastline` shapefile for a broad Mediterranean bbox. The smaller `data/coast-db/cote-azur` dataset is kept as a fast development fixture, and `data/rough-antibes-v1.json` is kept as a minimal fallback fixture.
 
+## PMTiles / MVT
+
+The plugin can also use a standard PMTiles archive containing Mapbox Vector Tiles. Point `dataPath` to a `.pmtiles` file and configure the MVT coastline layer if needed:
+
+```json
+{
+  "dataPath": "/path/to/french-mediterranean.pmtiles",
+  "pmtiles": {
+    "layerName": "coastline",
+    "zoom": 12
+  }
+}
+```
+
+PMTiles tiles are decoded on demand and cached in memory. This keeps the distributed data in a single file while still allowing the runtime to calculate distances from line geometries.
+
+The bundled `data/charts/french-mediterranean.pmtiles` covers the French Mediterranean coast and Corsica. It is generated as a vector tile archive with a `coastline` layer and can be used both for distance calculations and display.
+
+## Freeboard Chart Resource
+
+When `charts.enabled` is true, the plugin registers a Signal K `charts` resource for the configured PMTiles file. It also serves the archive from:
+
+```text
+/plugins/distance-to-shore/charts/french-mediterranean.pmtiles
+```
+
+This lets Freeboard display the exact coastline layer used by the plugin as a map overlay. The layer is auxiliary debug/awareness data, not a certified navigation chart.
+
 ## Building Coast Data
 
 For a local area, fetch coastline data from OSM Overpass:
@@ -100,6 +132,20 @@ npm run fetch:coastline
 ```
 
 The default download is `https://osmdata.openstreetmap.de/download/coastlines-split-4326.zip`. It is large, so the Overpass flow is preferable for small development regions.
+
+## Building PMTiles
+
+Build the bundled French Mediterranean PMTiles archive from the bundled Mediterranean `coast-db`:
+
+```sh
+npm run build:coast-pmtiles
+```
+
+The default bbox is `2.6,41.2,9.8,43.95`, covering the French Mediterranean coast and Corsica. Custom `.shp`, `.geojson`, `coast-db` directory, and `manifest.json` sources are supported:
+
+```sh
+npm run build:coast-pmtiles -- --source data/sources/coastlines-split-4326/lines.shp --output data/charts/custom.pmtiles --bbox 2.6,41.2,9.8,43.95 --minzoom 6 --maxzoom 12 --layer coastline
+```
 
 ## Data Attribution
 
