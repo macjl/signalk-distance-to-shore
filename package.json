@@ -19,8 +19,6 @@
     "tools",
     "public",
     "data/charts",
-    "data/coast-db/cote-azur",
-    "data/coast-db/mediterranean",
     "data/rough-antibes-v1.json",
     "README.md",
     "CHANGELOG.md",
@@ -67,12 +65,5 @@
   "signalk": {
     "displayName": "Distance To Shore",
     "appIcon": "./public/icon.svg"
-  },
-  "dependencies": {
-    "@mapbox/vector-tile": "^3.0.0",
-    "geojson-vt": "^4.0.3",
-    "pbf": "^5.1.0",
-    "pmtiles": "^4.4.1",
-    "vt-pbf": "^3.1.3"
   }
 }

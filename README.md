@@ -2,9 +2,9 @@
 
 Signal K plugin that publishes the distance from the vessel position to the nearest known coastline.
 
-This plugin intentionally uses an unsigned distance model: it does not try to decide whether the vessel is on land or at sea. It reports how close the position is to a known coast segment, which is useful for display, rules, alerts and simulators that need a minimum shore clearance.
+The plugin uses a PMTiles v3 archive containing Mapbox Vector Tiles. It reads coastline line geometries, calculates the nearest coastline from `navigation.position`, and publishes the result as Signal K paths.
 
-The bundled dataset is derived from OpenStreetMap coastline data. It is non-certified auxiliary information, not a navigation chart.
+This is auxiliary OpenStreetMap-derived information. It is not a certified navigation chart.
 
 ## Installation
 
@@ -16,11 +16,13 @@ npm install signalk-distance-to-shore
 
 Then enable and configure the plugin from the Signal K Admin UI.
 
-By default the plugin reads:
+## Published Paths
+
+The plugin always reads:
 
 - `navigation.position`
 
-And publishes:
+The plugin always publishes:
 
 - `navigation.distanceToShore`
 - `navigation.shore.closestPoint`
@@ -30,131 +32,84 @@ All distances are in meters. Bearings are in radians, following normal Signal K 
 
 ## Configuration
 
-Main options:
+The user-facing options are intentionally small:
 
-- `inputPositionPath`: Signal K position path to read, default `navigation.position`
-- `dataPath`: custom coast database path; blank uses the bundled Mediterranean dataset
-- `pmtiles.layerName`: MVT layer name used when `dataPath` points to a PMTiles file, default `coastline`
-- `pmtiles.zoom`: MVT zoom used for distance calculations, default `12`
-- `charts.enabled`: publish a Signal K chart resource for Freeboard, default `true`
-- `charts.path`: PMTiles chart file path; blank uses the bundled French Mediterranean PMTiles file
+- `pmtilesPath`: path to the active PMTiles coastline file
+- `publishChartResource`: publish the active PMTiles file as a Signal K chart resource for Freeboard
 - `tickIntervalMs`: calculation interval, default `1000`
-- `searchRadiusMeters`: maximum coast search radius, default `10000`
-- `publishing.distancePath`: output distance path, default `navigation.distanceToShore`
-- `publishing.closestPointPath`: output closest coast position path, default `navigation.shore.closestPoint`
-- `publishing.bearingTruePath`: output bearing to closest coast path, default `navigation.shore.bearingTrue`
+- `searchRadiusMeters`: maximum coastline search radius, default `10000`
 
-## Data Format
-
-The runtime coastline database is precomputed into a tiled JSON gzip format:
+If `pmtilesPath` is blank, the plugin uses the bundled French Mediterranean sample:
 
 ```text
-data/coast-db/mediterranean/
-  manifest.json
-  tiles/
-    12-2129-1495.json.gz
+data/charts/french-mediterranean.pmtiles
 ```
 
-The plugin also supports the original development fixture format:
+For a real installation, place PMTiles files in a persistent Signal K data directory, for example:
+
+```text
+~/.signalk/plugin-config-data/distance-to-shore/charts/
+```
+
+The directory may contain multiple `.pmtiles` files. The plugin does not choose automatically between them: `pmtilesPath` selects the single active file used for both distance calculations and the Freeboard chart resource. This keeps behavior predictable when several regional or world datasets are installed.
+
+## PMTiles Format
+
+The configured file must be:
+
+- PMTiles v3
+- MVT tile type
+- line geometries
+- coastline layer named `coastline`
+- zoom `12` available for distance calculations
+
+Zooms `0` to `11` are useful for Freeboard display, but the runtime distance calculation uses zoom `12`.
+
+Example configuration:
 
 ```json
 {
-  "version": 1,
-  "tiles": [
-    {
-      "id": "rough-antibes-main",
-      "bbox": [7.02, 43.52, 7.20, 43.66],
-      "segments": [
-        [[7.05, 43.56], [7.08, 43.57]]
-      ]
-    }
-  ]
+  "pmtilesPath": "/home/node/.signalk/plugin-config-data/distance-to-shore/charts/world-display-z0-z11-runtime-z12.pmtiles",
+  "publishChartResource": true,
+  "tickIntervalMs": 1000,
+  "searchRadiusMeters": 10000
 }
 ```
 
-Coordinates are stored as `[longitude, latitude]`. Each tile has a bounding box `[minLon, minLat, maxLon, maxLat]`.
+## World Coastline Dataset
 
-The default dataset is `data/coast-db/mediterranean`, generated from the processed OpenStreetMap `natural=coastline` shapefile for a broad Mediterranean bbox. The smaller `data/coast-db/cote-azur` dataset is kept as a fast development fixture, and `data/rough-antibes-v1.json` is kept as a minimal fallback fixture.
+A world PMTiles dataset is available in a separate GitHub repository:
 
-## PMTiles / MVT
+https://github.com/macjl/signalk-distance-to-shore-world-coastline
 
-The plugin can also use a standard PMTiles archive containing Mapbox Vector Tiles. Point `dataPath` to a `.pmtiles` file and configure the MVT coastline layer if needed:
+That repository documents the source data, generation commands, checksums, and GitHub release asset.
 
-```json
-{
-  "dataPath": "/path/to/french-mediterranean.pmtiles",
-  "pmtiles": {
-    "layerName": "coastline",
-    "zoom": 12
-  }
-}
-```
+The world archive uses:
 
-PMTiles tiles are decoded on demand and cached in memory. This keeps the distributed data in a single file while still allowing the runtime to calculate distances from line geometries.
+- `z0-z11`: simplified tiles for display
+- `z12`: precise tiles for distance calculations
+- layer: `coastline`
 
-The bundled `data/charts/french-mediterranean.pmtiles` covers the French Mediterranean coast and Corsica. It is generated as a vector tile archive with a `coastline` layer and can be used both for distance calculations and display.
+Download the release asset and configure `pmtilesPath` to point to the downloaded file.
 
 ## Freeboard Chart Resource
 
-When `charts.enabled` is true, the plugin registers a Signal K `charts` resource for the configured PMTiles file. It also serves the archive from:
+When `publishChartResource` is true, the plugin registers the active PMTiles file as a Signal K `charts` resource.
+
+It also serves the archive from:
 
 ```text
-/plugins/distance-to-shore/charts/french-mediterranean.pmtiles
+/plugins/distance-to-shore/charts/<file-name>.pmtiles
 ```
 
 This lets Freeboard display the exact coastline layer used by the plugin as a map overlay. The layer is auxiliary debug/awareness data, not a certified navigation chart.
 
-## Building Coast Data
-
-For a local area, fetch coastline data from OSM Overpass:
-
-```sh
-npm run fetch:coastline:bbox -- --bbox 6.6,42.9,7.8,43.9 --output data/sources/cote-azur-coastline.geojson
-```
-
-Then build the optimized tiled database:
-
-```sh
-npm run build:coast-db -- --source data/sources/cote-azur-coastline.geojson --output data/coast-db/cote-azur --bbox 6.6,42.9,7.8,43.9 --zoom 12 --name cote-azur-osm
-```
-
-To build the Mediterranean dataset from the processed OSM coastline shapefile:
-
-```sh
-npm run fetch:coastline
-npm run build:coast-db -- --source data/sources/coastlines-split-4326.zip --output data/coast-db/mediterranean --bbox -6,30,37,46.5 --zoom 12 --name mediterranean-osm
-```
-
-For larger production datasets, download the processed OSM coastline shapefile:
-
-```sh
-npm run fetch:coastline
-```
-
-The default download is `https://osmdata.openstreetmap.de/download/coastlines-split-4326.zip`. It is large, so the Overpass flow is preferable for small development regions.
-
-## Building PMTiles
-
-Build the bundled French Mediterranean PMTiles archive from the bundled Mediterranean `coast-db`:
-
-```sh
-npm run build:coast-pmtiles
-```
-
-The default bbox is `2.6,41.2,9.8,43.95`, covering the French Mediterranean coast and Corsica. Custom `.shp`, `.geojson`, `coast-db` directory, and `manifest.json` sources are supported:
-
-```sh
-npm run build:coast-pmtiles -- --source data/sources/coastlines-split-4326/lines.shp --output data/charts/custom.pmtiles --bbox 2.6,41.2,9.8,43.95 --minzoom 6 --maxzoom 12 --layer coastline
-```
-
 ## Data Attribution
 
-The generated coastline data is derived from OpenStreetMap and must keep appropriate OpenStreetMap attribution.
+The bundled and downloadable coastline data is derived from OpenStreetMap and must keep appropriate attribution.
 
-- © OpenStreetMap contributors
+- OpenStreetMap contributors
 - https://www.openstreetmap.org/copyright
-
-Treat the data as non-certified auxiliary information, not as a navigation chart.
 
 ## Simulator Use
 
@@ -162,6 +117,3 @@ The sailboat simulator can consume `navigation.distanceToShore` and stop the vir
 
 It can also consume `navigation.shore.bearingTrue` to allow recovery headings away from shore when the boat is already too close.
 
-## Publishing
-
-The package is discoverable by the Signal K AppStore through the `signalk-node-server-plugin` keyword. The GitHub release workflow publishes to npm, following the same pattern as `signalk-compass-calibrator`.

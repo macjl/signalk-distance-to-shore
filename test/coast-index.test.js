@@ -146,7 +146,7 @@ test('plugin publishes distance details from navigation position', () => {
   const plugin = createPlugin(app)
 
   plugin.start({
-    dataPath: '',
+    dataPath: path.join(__dirname, '..', 'data', 'rough-antibes-v1.json'),
     searchRadiusMeters: 20000
   })
   plugin.stop()
