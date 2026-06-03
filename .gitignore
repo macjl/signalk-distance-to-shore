@@ -2,5 +2,6 @@ node_modules/
 npm-debug.log*
 data/sources/
 data/coast-db/world-z12-measure/
+plugin-config-data/
 *.tgz
 .DS_Store

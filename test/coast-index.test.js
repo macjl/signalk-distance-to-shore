@@ -2,6 +2,8 @@
 
 const assert = require('node:assert/strict')
 const test = require('node:test')
+const os = require('node:os')
+const path = require('node:path')
 const zlib = require('node:zlib')
 const geojsonvt = require('geojson-vt').default
 const vtpbf = require('vt-pbf')
@@ -81,8 +83,89 @@ test('chart resource coast index reports authentication failures clearly', async
 
   await assert.rejects(
     () => index.findNearest({ latitude: 0, longitude: 0 }),
-    /Configure signalKAccessToken or SIGNALK_DISTANCE_TO_SHORE_TOKEN/
+    /request Signal K device access automatically/
   )
+})
+
+test('plugin requests Signal K device access automatically after HTTP 401', async () => {
+  const messages = []
+  const statuses = []
+  const accessRequests = []
+  const providerFetch = createChartProviderFetch()
+  let pollCount = 0
+  const stateFile = path.join(os.tmpdir(), `signalk-distance-to-shore-${Date.now()}-${Math.random()}.json`)
+
+  const fetchImpl = async (url, options = {}) => {
+    const parsed = new URL(url)
+    const auth = options.headers && options.headers.Authorization
+
+    if (parsed.pathname === '/signalk/v1/access/requests' && options.method === 'POST') {
+      accessRequests.push(JSON.parse(options.body))
+      return jsonResponse({
+        state: 'PENDING',
+        statusCode: 202,
+        requestId: 'request-1',
+        href: '/signalk/v1/requests/request-1'
+      }, 202)
+    }
+
+    if (parsed.pathname === '/signalk/v1/requests/request-1') {
+      pollCount += 1
+      if (pollCount === 1) {
+        return jsonResponse({
+          state: 'COMPLETED',
+          statusCode: 200,
+          accessRequest: {
+            permission: 'APPROVED',
+            token: 'approved-token'
+          }
+        })
+      }
+    }
+
+    if (parsed.pathname.startsWith('/signalk/v1/api/resources/charts/test-coastline/') ||
+      parsed.pathname === '/signalk/v2/api/resources/charts/test-coastline') {
+      if (auth !== 'Bearer approved-token') return new Response('', { status: 401 })
+      return providerFetch(url, options)
+    }
+
+    return new Response('', { status: 404 })
+  }
+
+  const app = {
+    config: { configPath: os.tmpdir() },
+    getSelfPath: (path) => {
+      if (path === 'navigation.position.value') {
+        return { latitude: 0, longitude: 0 }
+      }
+      return null
+    },
+    handleMessage: (id, message) => {
+      messages.push({ id, message })
+    },
+    setPluginStatus: (value) => {
+      statuses.push(value)
+    }
+  }
+  const plugin = createPlugin(app)
+
+  plugin.start({
+    chartResourceId: 'test-coastline',
+    signalKBaseUrl: 'http://signalk.test',
+    fetchImpl,
+    accessStateFile: stateFile,
+    searchRadiusMeters: 20000,
+    tickIntervalMs: 250
+  })
+
+  await waitFor(() => messages.length > 0, 2000)
+  plugin.stop()
+
+  assert.equal(accessRequests.length, 1)
+  assert.equal(accessRequests[0].description, 'Signal K Distance To Shore coastline resource reader')
+  assert.equal(typeof accessRequests[0].clientId, 'string')
+  assert.equal(messages.length >= 1, true)
+  assert.equal(statuses.some((status) => status.includes('Waiting for Signal K access approval')), true)
 })
 
 test('plugin publishes distance details from navigation position', async () => {
@@ -176,9 +259,9 @@ function createCoastlineMvtTile () {
   })
 }
 
-function jsonResponse (data) {
+function jsonResponse (data, status = 200) {
   return new Response(JSON.stringify(data), {
-    status: 200,
+    status,
     headers: { 'content-type': 'application/json' }
   })
 }
@@ -190,10 +273,10 @@ function binaryResponse (data) {
   })
 }
 
-async function waitFor (predicate) {
+async function waitFor (predicate, timeout = 1000) {
   const started = Date.now()
   while (!predicate()) {
-    if (Date.now() - started > 1000) throw new Error('Timed out waiting for condition')
+    if (Date.now() - started > timeout) throw new Error('Timed out waiting for condition')
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
 }

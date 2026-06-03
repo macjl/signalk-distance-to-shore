@@ -1,6 +1,7 @@
 'use strict'
 
 const { createChartResourceCoastIndex } = require('./lib/coast-index')
+const { createAccessRequestManager, isAuthRequiredError } = require('./lib/access-request')
 const { buildSchema } = require('./lib/plugin-schema')
 
 const PLUGIN_ID = 'distance-to-shore'
@@ -24,6 +25,8 @@ module.exports = function createPlugin (app) {
   let options = DEFAULT_OPTIONS
   let timer = null
   let coastIndex = null
+  let accessManager = null
+  let accessToken = ''
   let runtime = inactiveRuntime()
   let tickRunning = false
 
@@ -49,12 +52,16 @@ module.exports = function createPlugin (app) {
       return
     }
 
-    coastIndex = createChartResourceCoastIndex({
-      resourceId: options.chartResourceId,
+    accessManager = createAccessRequestManager({
+      app,
+      pluginId: PLUGIN_ID,
       signalKBaseUrl: options.signalKBaseUrl || DEFAULT_SIGNAL_K_BASE_URL,
       fetchImpl: options.fetchImpl,
-      accessToken: options.signalKAccessToken || process.env.SIGNALK_DISTANCE_TO_SHORE_TOKEN || process.env.SIGNALK_ACCESS_TOKEN
+      stateFile: options.accessStateFile,
+      description: 'Signal K Distance To Shore coastline resource reader'
     })
+    accessToken = options.signalKAccessToken || process.env.SIGNALK_DISTANCE_TO_SHORE_TOKEN || process.env.SIGNALK_ACCESS_TOKEN || accessManager.getStoredToken()
+    createCoastIndex()
     runtime.dataSource = `chart:${options.chartResourceId}`
 
     tick()
@@ -66,14 +73,22 @@ module.exports = function createPlugin (app) {
     if (timer) clearInterval(timer)
     timer = null
     coastIndex = null
+    accessManager = null
+    accessToken = ''
     runtime.status = 'inactive'
     setStatus()
   }
 
   async function tick () {
-    if (tickRunning || !coastIndex) return
+    if (tickRunning) return
+    if (!coastIndex && runtime.status !== 'waitingForAccessApproval') return
     tickRunning = true
     try {
+      if (runtime.status === 'waitingForAccessApproval') {
+        await pollAccessApproval()
+        return
+      }
+
       const position = readPosition(INPUT_POSITION_PATH)
       if (!position) {
         runtime.status = 'waitingForPosition'
@@ -102,6 +117,11 @@ module.exports = function createPlugin (app) {
       publishNearest(nearest)
       setStatus()
     } catch (error) {
+      if (isAuthRequiredError(error)) {
+        await startAccessRequest(error)
+        return
+      }
+
       runtime.status = 'error'
       runtime.error = error.message
       app.error && app.error(`Distance To Shore tick failed: ${error.message}`)
@@ -109,6 +129,82 @@ module.exports = function createPlugin (app) {
     } finally {
       tickRunning = false
     }
+  }
+
+  function createCoastIndex () {
+    coastIndex = createChartResourceCoastIndex({
+      resourceId: options.chartResourceId,
+      signalKBaseUrl: options.signalKBaseUrl || DEFAULT_SIGNAL_K_BASE_URL,
+      fetchImpl: options.fetchImpl,
+      accessToken
+    })
+  }
+
+  async function startAccessRequest (error) {
+    if (!accessManager) throw error
+
+    accessManager.clearToken()
+    accessToken = ''
+    coastIndex = null
+
+    try {
+      const reply = await accessManager.requestAccess()
+      if (reply.state === 'APPROVED') {
+        accessToken = reply.accessToken
+        createCoastIndex()
+        runtime.status = 'accessApproved'
+        runtime.error = ''
+      } else if (reply.state === 'PENDING') {
+        runtime.status = 'waitingForAccessApproval'
+        runtime.accessClientId = reply.clientId
+        runtime.accessRequestHref = reply.href
+        runtime.error = ''
+      } else if (reply.state === 'DENIED') {
+        runtime.status = 'accessDenied'
+        runtime.error = 'Signal K device access request was denied'
+      } else {
+        runtime.status = 'accessError'
+        runtime.error = reply.message || 'Signal K device access request failed'
+      }
+    } catch (requestError) {
+      runtime.status = 'accessError'
+      runtime.error = requestError.message
+      app.error && app.error(`Distance To Shore access request failed: ${requestError.message}`)
+    } finally {
+      setStatus()
+    }
+  }
+
+  async function pollAccessApproval () {
+    if (!accessManager) return
+
+    const reply = await accessManager.pollAccessRequest()
+    if (reply.state === 'PENDING') {
+      runtime.accessClientId = reply.clientId
+      runtime.accessRequestHref = reply.href
+      setStatus()
+      return
+    }
+
+    if (reply.state === 'APPROVED') {
+      accessToken = reply.accessToken
+      createCoastIndex()
+      runtime.status = 'accessApproved'
+      runtime.error = ''
+      setStatus()
+      return
+    }
+
+    if (reply.state === 'DENIED') {
+      runtime.status = 'accessDenied'
+      runtime.error = 'Signal K device access request was denied'
+      setStatus()
+      return
+    }
+
+    runtime.status = 'accessError'
+    runtime.error = reply.message || 'Signal K device access request failed'
+    setStatus()
   }
 
   function readPosition (path) {
@@ -154,6 +250,14 @@ module.exports = function createPlugin (app) {
       app.setPluginStatus('No coastline found within search radius')
     } else if (runtime.status === 'waitingForPosition') {
       app.setPluginStatus('Waiting for navigation.position')
+    } else if (runtime.status === 'waitingForAccessApproval') {
+      app.setPluginStatus(`Waiting for Signal K access approval (${runtime.accessClientId})`)
+    } else if (runtime.status === 'accessApproved') {
+      app.setPluginStatus('Signal K access approved; waiting for next calculation')
+    } else if (runtime.status === 'accessDenied') {
+      app.setPluginStatus('Signal K access request denied')
+    } else if (runtime.status === 'accessError') {
+      app.setPluginStatus(`Access request error: ${runtime.error}`)
     } else if (runtime.status === 'error') {
       app.setPluginStatus(`Error: ${runtime.error}`)
     } else {
@@ -171,6 +275,8 @@ function inactiveRuntime () {
     closestPoint: null,
     bearingTrue: null,
     tileId: '',
+    accessClientId: '',
+    accessRequestHref: '',
     error: ''
   }
 }

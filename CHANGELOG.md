@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Automatically submit a Signal K device access request when chart resources return HTTP 401.
+- Persist the approved device token in local plugin data and reuse it on later starts.
+- Keep manual bearer token configuration as a fallback.
+
 ## 0.1.1
 
 - Add optional Signal K access token support for secured chart resource endpoints.
