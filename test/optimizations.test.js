@@ -124,7 +124,7 @@ test('findNearest fetches far fewer tiles when coast is sparse (hierarchy prunin
 })
 
 test('findNearest does not activate hierarchy for small radius (below threshold)', async () => {
-  // 10 km radius → ~4 z12 tiles → below PREFILTER_THRESHOLD_TILES (16), no hierarchy.
+  // 10 km radius → ~16 z12 tiles (4×4 when position falls on a tile corner) → below PREFILTER_THRESHOLD_TILES (25), no hierarchy.
   // Only z12 tiles should be fetched (no coarse zoom tiles).
   const fetched = []
 
