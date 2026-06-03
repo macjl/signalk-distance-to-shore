@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Store the Signal K access request token through the official plugin data directory API.
+
 ## 0.1.2
 
 - Automatically submit a Signal K device access request when chart resources return HTTP 401.
