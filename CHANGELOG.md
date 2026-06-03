@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.1
+
+- Add optional Signal K access token support for secured chart resource endpoints.
+- Improve HTTP 401 errors with production authentication guidance.
+
+## 0.1.0
 
 - Move world PMTiles generation and world dataset distribution to `signalk-distance-to-shore-world-coastline`.
 - Remove world PMTiles assets from the plugin package.
@@ -8,9 +13,6 @@
 - Remove direct chart publishing and PMTiles serving from this plugin.
 - Simplify plugin configuration to `chartResourceId`, interval, and search radius.
 - Use fixed Signal K input and output paths.
-
-## 0.1.0
-
 - Initial plugin scaffold.
 - Add a precomputed coastline tile format with bundled Mediterranean and Côte d'Azur sample data.
 - Publish distance to nearest coastline from `navigation.position`.

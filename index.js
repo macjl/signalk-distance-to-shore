@@ -15,6 +15,7 @@ const PUBLISHED_PATHS = {
 
 const DEFAULT_OPTIONS = {
   chartResourceId: '',
+  signalKAccessToken: '',
   tickIntervalMs: 1000,
   searchRadiusMeters: 10000
 }
@@ -51,7 +52,8 @@ module.exports = function createPlugin (app) {
     coastIndex = createChartResourceCoastIndex({
       resourceId: options.chartResourceId,
       signalKBaseUrl: options.signalKBaseUrl || DEFAULT_SIGNAL_K_BASE_URL,
-      fetchImpl: options.fetchImpl
+      fetchImpl: options.fetchImpl,
+      accessToken: options.signalKAccessToken || process.env.SIGNALK_DISTANCE_TO_SHORE_TOKEN || process.env.SIGNALK_ACCESS_TOKEN
     })
     runtime.dataSource = `chart:${options.chartResourceId}`
 
@@ -181,6 +183,7 @@ function normalizeOptions (rawOptions) {
   return {
     ...rawOptions,
     chartResourceId: rawOptions.chartResourceId || '',
+    signalKAccessToken: typeof rawOptions.signalKAccessToken === 'string' ? rawOptions.signalKAccessToken.trim() : '',
     tickIntervalMs: Math.max(250, numberOr(rawOptions.tickIntervalMs, DEFAULT_OPTIONS.tickIntervalMs)),
     searchRadiusMeters: Math.max(20, numberOr(rawOptions.searchRadiusMeters, DEFAULT_OPTIONS.searchRadiusMeters))
   }

@@ -49,6 +49,42 @@ test('chart resource coast index reads MVT tiles from a Signal K chart provider'
   assert.equal(nearest.closestPoint.longitude < 0.1, true)
 })
 
+test('chart resource coast index sends an access token when configured', async () => {
+  const requests = []
+  const providerFetch = createChartProviderFetch()
+  const index = createChartResourceCoastIndex({
+    resourceId: 'test-coastline',
+    signalKBaseUrl: 'http://signalk.test',
+    accessToken: 'test-token',
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options })
+      return providerFetch(url, options)
+    }
+  })
+
+  const nearest = await index.findNearest(
+    { latitude: 0, longitude: 0 },
+    { searchRadiusMeters: 20000 }
+  )
+
+  assert.equal(nearest.distance, 0)
+  assert.equal(requests.length > 1, true)
+  assert.equal(requests.every((request) => request.options.headers.Authorization === 'Bearer test-token'), true)
+})
+
+test('chart resource coast index reports authentication failures clearly', async () => {
+  const index = createChartResourceCoastIndex({
+    resourceId: 'test-coastline',
+    signalKBaseUrl: 'http://signalk.test',
+    fetchImpl: async () => new Response('', { status: 401 })
+  })
+
+  await assert.rejects(
+    () => index.findNearest({ latitude: 0, longitude: 0 }),
+    /Configure signalKAccessToken or SIGNALK_DISTANCE_TO_SHORE_TOKEN/
+  )
+})
+
 test('plugin publishes distance details from navigation position', async () => {
   const messages = []
   let status = ''

@@ -35,6 +35,7 @@ All distances are in meters. Bearings are in radians, following normal Signal K 
 The user-facing options are intentionally small:
 
 - `chartResourceId`: Signal K chart resource identifier to use for calculations
+- `signalKAccessToken`: optional Signal K bearer token when chart resources require authentication
 - `tickIntervalMs`: calculation interval, default `1000`
 - `searchRadiusMeters`: maximum coastline search radius, default `10000`
 
@@ -47,6 +48,10 @@ Example configuration:
   "searchRadiusMeters": 10000
 }
 ```
+
+On secured production servers, Signal K chart resource HTTP endpoints may require authentication even when they are called from another local plugin. In that case, create a Signal K access token and set `signalKAccessToken`, or provide the same value with the `SIGNALK_DISTANCE_TO_SHORE_TOKEN` environment variable.
+
+If the token already includes the `Bearer ` prefix, the plugin keeps it as-is. Otherwise it sends it as a bearer token automatically.
 
 ## Chart Resource Format
 
