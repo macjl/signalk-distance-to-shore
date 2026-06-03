@@ -2,7 +2,7 @@
 
 Signal K plugin that publishes the distance from the vessel position to the nearest known coastline.
 
-The plugin uses a PMTiles v3 archive containing Mapbox Vector Tiles. It reads coastline line geometries, calculates the nearest coastline from `navigation.position`, and publishes the result as Signal K paths.
+The plugin uses a standard Signal K chart resource served by a chart provider, such as `signalk-charts-provider-simple`. It reads coastline line geometries from vector tiles, calculates the nearest coastline from `navigation.position`, and publishes the result as Signal K paths.
 
 This is auxiliary OpenStreetMap-derived information. It is not a certified navigation chart.
 
@@ -34,55 +34,40 @@ All distances are in meters. Bearings are in radians, following normal Signal K 
 
 The user-facing options are intentionally small:
 
-- `pmtilesPath`: path to the active PMTiles coastline file
-- `publishChartResource`: publish the active PMTiles file as a Signal K chart resource for Freeboard
+- `chartResourceId`: Signal K chart resource identifier to use for calculations
 - `tickIntervalMs`: calculation interval, default `1000`
 - `searchRadiusMeters`: maximum coastline search radius, default `10000`
 
-If `pmtilesPath` is blank, the plugin uses the bundled French Mediterranean sample:
+Example configuration:
 
-```text
-data/charts/french-mediterranean.pmtiles
+```json
+{
+  "chartResourceId": "world-display-z0-z11-runtime-z12",
+  "tickIntervalMs": 1000,
+  "searchRadiusMeters": 10000
+}
 ```
 
-For a real installation, place PMTiles files in a persistent Signal K data directory, for example:
+## Chart Resource Format
 
-```text
-~/.signalk/plugin-config-data/distance-to-shore/charts/
-```
+The configured Signal K chart resource must be:
 
-The directory may contain multiple `.pmtiles` files. The plugin does not choose automatically between them: `pmtilesPath` selects the single active file used for both distance calculations and the Freeboard chart resource. This keeps behavior predictable when several regional or world datasets are installed.
-
-## PMTiles Format
-
-The configured file must be:
-
-- PMTiles v3
-- MVT tile type
+- vector MVT/PBF tiles
 - line geometries
 - coastline layer named `coastline`
 - zoom `12` available for distance calculations
 
 Zooms `0` to `11` are useful for Freeboard display, but the runtime distance calculation uses zoom `12`.
 
-Example configuration:
-
-```json
-{
-  "pmtilesPath": "/home/node/.signalk/plugin-config-data/distance-to-shore/charts/world-display-z0-z11-runtime-z12.pmtiles",
-  "publishChartResource": true,
-  "tickIntervalMs": 1000,
-  "searchRadiusMeters": 10000
-}
-```
+The plugin validates the chart resource metadata at startup. If the resource is raster, missing the `coastline` layer, or missing zoom 12, it reports a clear error in the plugin status.
 
 ## World Coastline Dataset
 
-A world PMTiles dataset is available in a separate GitHub repository:
+A world coastline dataset and build tooling are maintained in a separate GitHub repository:
 
 https://github.com/macjl/signalk-distance-to-shore-world-coastline
 
-That repository documents the source data, generation commands, checksums, and GitHub release asset.
+That repository documents the source data, generation commands, checksums, and release assets. Install the generated chart in a Signal K chart provider, then configure this plugin with the chart resource identifier reported by the provider.
 
 The world archive uses:
 
@@ -90,19 +75,11 @@ The world archive uses:
 - `z12`: precise tiles for distance calculations
 - layer: `coastline`
 
-Download the release asset and configure `pmtilesPath` to point to the downloaded file.
+The chart provider may expose several chart resources from the same directory. This plugin does not auto-select between them: `chartResourceId` selects the single resource used for distance calculations.
 
 ## Freeboard Chart Resource
 
-When `publishChartResource` is true, the plugin registers the active PMTiles file as a Signal K `charts` resource.
-
-It also serves the archive from:
-
-```text
-/plugins/distance-to-shore/charts/<file-name>.pmtiles
-```
-
-This lets Freeboard display the exact coastline layer used by the plugin as a map overlay. The layer is auxiliary debug/awareness data, not a certified navigation chart.
+This plugin does not publish or serve chart resources. Use the configured chart provider to expose the same coastline chart to Freeboard. This keeps chart distribution, discovery, and display in the standard chart provider path, while this plugin focuses only on distance calculations.
 
 ## Data Attribution
 
@@ -116,4 +93,3 @@ The bundled and downloadable coastline data is derived from OpenStreetMap and mu
 The sailboat simulator can consume `navigation.distanceToShore` and stop the virtual boat when the value is below a configured clearance, for example 20 meters.
 
 It can also consume `navigation.shore.bearingTrue` to allow recovery headings away from shore when the boat is already too close.
-
