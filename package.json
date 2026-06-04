@@ -1,6 +1,6 @@
 {
   "name": "signalk-distance-to-shore",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Signal K plugin that publishes distance to the nearest known coastline.",
   "main": "index.js",
   "scripts": {

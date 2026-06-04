@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+
+- Replace breadth-first hierarchical pre-filter with a depth-first search that applies early exit at every zoom level. Once a coastline is found at distance D, any tile whose bounding box is already ≥ D away is skipped — pruning entire subtrees at coarse zoom levels before they are ever fetched. This reduces tile fetches by up to ×1900 for large search radii.
+- Recover gracefully from a stale device access request after a Signal K server restart: if polling the stored request returns "not found", the request is silently recreated instead of failing permanently.
+
 ## 0.1.3
 
 - Store the Signal K access request token through the official plugin data directory API.
