@@ -2,8 +2,21 @@
 
 ## 0.2.0
 
-- Replace breadth-first hierarchical pre-filter with a depth-first search that applies early exit at every zoom level. Once a coastline is found at distance D, any tile whose bounding box is already ≥ D away is skipped — pruning entire subtrees at coarse zoom levels before they are ever fetched. This reduces tile fetches by up to ×1900 for large search radii.
-- Recover gracefully from a stale device access request after a Signal K server restart: if polling the stored request returns "not found", the request is silently recreated instead of failing permanently.
+### Distance calculation — depth-first hierarchical search
+
+The distance calculation algorithm has been completely rearchitected for efficiency.
+
+**Previous behaviour (≤ 0.1.3):** the plugin fetched all chart tiles at zoom 12 that fall within the search radius before computing any distance. For a 1000 km search radius this meant fetching and decoding roughly 41 600 tiles per calculation tick, with almost no benefit from caching because the working set far exceeded the tile cache.
+
+**New behaviour:** the search now uses a depth-first descent through successive zoom levels, visiting the tiles geometrically closest to the vessel first at each level. As soon as a coastline segment is found at distance D, any tile — at any zoom level — whose bounding box is already ≥ D away is pruned along with its entire subtree, without ever fetching it. In coastal navigation (where the nearest shore is typically only a few kilometres away) this means the algorithm reaches the answer after visiting only a handful of tiles per level and immediately discards everything farther.
+
+Measured on a vessel near the French Riviera with a 1000 km search radius: tile fetches dropped from ~753 HTTP requests per tick to ~0.4, a ×1900 reduction. Nearly all accessed tiles are warm in the small on-board cache, so subsequent ticks cost essentially nothing.
+
+Large search radii (tens or hundreds of kilometres) are now practical without any measurable CPU or network overhead.
+
+### Authentication — recovery from stale device access request
+
+After a Signal K server restart the pending device access request stored on disk becomes invalid. Previously the plugin would repeatedly fail with an "unable to check request" error and never recover without manual intervention (deleting the state file). The plugin now detects the "not found" error returned by the server, discards the stale request reference, and automatically submits a fresh access request on the next tick.
 
 ## 0.1.3
 

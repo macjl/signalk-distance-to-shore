@@ -55,6 +55,14 @@ Approve the request in Signal K Admin UI under Security > Access Requests. `read
 
 `signalKAccessToken` and `SIGNALK_DISTANCE_TO_SHORE_TOKEN` are still supported as manual fallback options. If the configured token already includes the `Bearer ` prefix, the plugin keeps it as-is. Otherwise it sends it as a bearer token automatically.
 
+## Search Algorithm
+
+Distance calculations use a depth-first hierarchical search across zoom levels. Starting from a coarse zoom level, the algorithm visits tiles sorted by their minimum possible distance to the vessel. As soon as a coastline segment is found at distance D, any tile at any zoom level whose bounding box is already ≥ D away is skipped — pruning its entire subtree without loading it. In typical coastal navigation the nearest shore is found in the first few tiles at each zoom level, and almost everything else is discarded immediately.
+
+This makes large search radii practical. A 1000 km radius processes roughly as fast as a 10 km radius: the algorithm dives straight to the nearest coastline and prunes the rest. Tile responses are cached between ticks; after the first tick, nearly all accesses are cache hits.
+
+The tile cache is sized automatically based on the configured search radius.
+
 ## Chart Resource Format
 
 The configured Signal K chart resource must be:
