@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- Default `chartResourceId` to `world-display-z0-z11-runtime-z12` so the plugin works out of the box with the recommended setup without any manual configuration.
+- Rename the search radius setting from `searchRadiusMeters` to `searchRadiusKm` and set the default to `1000` km. Thanks to the depth-first search algorithm, a large radius costs no more than a small one in normal coastal navigation. Existing configurations that stored `searchRadiusMeters` are automatically migrated.
+
 ## 0.2.0
 
 ### Distance calculation — depth-first hierarchical search
