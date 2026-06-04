@@ -6,15 +6,41 @@ The plugin uses a standard Signal K chart resource served by a chart provider, s
 
 This is auxiliary OpenStreetMap-derived information. It is not a certified navigation chart.
 
-## Installation
+## Quick Start
 
-Install from the Signal K AppStore once the package is available, or manually from a Signal K server configuration directory:
+The recommended setup uses the companion world coastline chart and the `signalk-charts-provider-simple` chart provider.
+
+**1. Install the chart provider**
+
+Install [`signalk-charts-provider-simple`](https://github.com/dirkwa/signalk-charts-provider-simple) from the Signal K AppStore, or:
+
+```sh
+npm install signalk-charts-provider-simple
+```
+
+**2. Download the world coastline chart**
+
+Download the latest `world-display-z0-z11-runtime-z12.mbtiles.zip` from the [signalk-distance-to-shore-world-coastline releases](https://github.com/macjl/signalk-distance-to-shore-world-coastline/releases/latest), unzip it, and point `signalk-charts-provider-simple` at the directory containing the `.mbtiles` file.
+
+The chart will be registered as `world-display-z0-z11-runtime-z12` in Signal K.
+
+**3. Install this plugin**
+
+Install `signalk-distance-to-shore` from the Signal K AppStore, or:
 
 ```sh
 npm install signalk-distance-to-shore
 ```
 
-Then enable and configure the plugin from the Signal K Admin UI.
+**4. Enable and approve**
+
+Enable the plugin in Signal K Admin UI. It defaults to the `world-display-z0-z11-runtime-z12` chart resource and a 1000 km search radius — no configuration change is needed.
+
+On a secured server, the plugin will request chart access automatically. Approve the request in **Security › Access Requests** with `readonly` permission.
+
+---
+
+Other chart providers and chart sources can also be used; see *Configuration* and *Chart Resource Format* below.
 
 ## Published Paths
 
@@ -34,20 +60,22 @@ All distances are in meters. Bearings are in radians, following normal Signal K 
 
 The user-facing options are intentionally small:
 
-- `chartResourceId`: Signal K chart resource identifier to use for calculations
-- `signalKAccessToken`: optional fallback Signal K bearer token
-- `tickIntervalMs`: calculation interval, default `1000`
-- `searchRadiusMeters`: maximum coastline search radius, default `10000`
+- `chartResourceId`: Signal K chart resource identifier. Default: `world-display-z0-z11-runtime-z12`
+- `searchRadiusKm`: maximum coastline search radius in kilometres. Default: `1000`
+- `tickIntervalMs`: calculation interval in milliseconds. Default: `1000`
+- `signalKAccessToken`: optional fallback bearer token (normally not needed — the plugin requests access automatically)
 
-Example configuration:
+Example configuration (these are the defaults; no change is required for the recommended setup):
 
 ```json
 {
   "chartResourceId": "world-display-z0-z11-runtime-z12",
-  "tickIntervalMs": 1000,
-  "searchRadiusMeters": 10000
+  "searchRadiusKm": 1000,
+  "tickIntervalMs": 1000
 }
 ```
+
+Thanks to the depth-first search algorithm, a 1000 km search radius costs no more than a 10 km radius in normal coastal navigation — the algorithm finds the nearest shore in a few tile fetches and discards everything else.
 
 On secured production servers, Signal K chart resource HTTP endpoints may require authentication even when they are called from another local plugin. The plugin starts without a token. If a chart resource request returns HTTP 401, it automatically submits a Signal K device access request.
 
@@ -63,6 +91,12 @@ This makes large search radii practical. A 1000 km radius processes roughly as f
 
 The tile cache is sized automatically based on the configured search radius.
 
+### Correctness requirement for chart tiles
+
+For the hierarchical pruning to be correct, the chart tile source must satisfy one invariant: **if a tile at zoom level N contains any coastline data, its parent tile at zoom N-1 must also be non-empty**, all the way up to the coarsest zoom level used. Without this guarantee, the algorithm could discard a coarse tile as empty and miss real coastline that only appears at finer zoom levels.
+
+The world coastline dataset from `signalk-distance-to-shore-world-coastline` is built to honour this invariant: even the shortest coastline segment at zoom 12 propagates upward through all parent tiles. Custom chart sources must enforce the same property in their tile build pipeline.
+
 ## Chart Resource Format
 
 The configured Signal K chart resource must be:
@@ -75,6 +109,8 @@ The configured Signal K chart resource must be:
 Zooms `0` to `11` are useful for Freeboard display, but the runtime distance calculation uses zoom `12`.
 
 The plugin validates the chart resource metadata at startup. If the resource is raster, missing the `coastline` layer, or missing zoom 12, it reports a clear error in the plugin status.
+
+Custom chart sources must also satisfy the parent-tile invariant described under *Search Algorithm*: every tile that contains coastline data must have non-empty ancestors at all coarser zoom levels.
 
 ## World Coastline Dataset
 

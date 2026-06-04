@@ -15,10 +15,10 @@ const PUBLISHED_PATHS = {
 }
 
 const DEFAULT_OPTIONS = {
-  chartResourceId: '',
+  chartResourceId: 'world-display-z0-z11-runtime-z12',
   signalKAccessToken: '',
   tickIntervalMs: 1000,
-  searchRadiusMeters: 10000
+  searchRadiusKm: 1000
 }
 
 module.exports = function createPlugin (app) {
@@ -97,7 +97,7 @@ module.exports = function createPlugin (app) {
       }
 
       const nearest = await coastIndex.findNearest(position, {
-        searchRadiusMeters: options.searchRadiusMeters
+        searchRadiusMeters: options.searchRadiusKm * 1000
       })
 
       if (!nearest) {
@@ -286,12 +286,16 @@ function mergeOptions (defaults, overrides) {
 }
 
 function normalizeOptions (rawOptions) {
+  // searchRadiusKm is the current config key. Accept the legacy searchRadiusMeters key
+  // (stored in configs saved before 0.2.0) by converting it to km if searchRadiusKm is absent.
+  const legacyKm = Number.isFinite(rawOptions.searchRadiusMeters) ? rawOptions.searchRadiusMeters / 1000 : undefined
+  const searchRadiusKm = Math.max(0.1, numberOr(rawOptions.searchRadiusKm ?? legacyKm, DEFAULT_OPTIONS.searchRadiusKm))
   return {
     ...rawOptions,
-    chartResourceId: rawOptions.chartResourceId || '',
+    chartResourceId: rawOptions.chartResourceId || DEFAULT_OPTIONS.chartResourceId,
     signalKAccessToken: typeof rawOptions.signalKAccessToken === 'string' ? rawOptions.signalKAccessToken.trim() : '',
     tickIntervalMs: Math.max(250, numberOr(rawOptions.tickIntervalMs, DEFAULT_OPTIONS.tickIntervalMs)),
-    searchRadiusMeters: Math.max(20, numberOr(rawOptions.searchRadiusMeters, DEFAULT_OPTIONS.searchRadiusMeters))
+    searchRadiusKm
   }
 }
 

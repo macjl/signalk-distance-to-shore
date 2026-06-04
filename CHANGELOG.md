@@ -14,6 +14,11 @@ Measured on a vessel near the French Riviera with a 1000 km search radius: tile 
 
 Large search radii (tens or hundreds of kilometres) are now practical without any measurable CPU or network overhead.
 
+### Configuration changes
+
+- `chartResourceId` now defaults to `world-display-z0-z11-runtime-z12`, matching the chart identifier produced by `signalk-charts-provider-simple` when serving the `signalk-distance-to-shore-world-coastline` dataset. No manual configuration is needed for the recommended setup.
+- The search radius setting has been renamed from `searchRadiusMeters` to `searchRadiusKm` and now defaults to `1000` km. Existing configurations that stored `searchRadiusMeters` are automatically migrated.
+
 ### Authentication — recovery from stale device access request
 
 After a Signal K server restart the pending device access request stored on disk becomes invalid. Previously the plugin would repeatedly fail with an "unable to check request" error and never recover without manual intervention (deleting the state file). The plugin now detects the "not found" error returned by the server, discards the stale request reference, and automatically submits a fresh access request on the next tick.
