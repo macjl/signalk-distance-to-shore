@@ -20,9 +20,13 @@ npm install signalk-charts-provider-simple
 
 **2. Download the world coastline chart**
 
-Download the latest `world-display-z0-z11-runtime-z12.mbtiles.zip` from the [signalk-distance-to-shore-world-coastline releases](https://github.com/macjl/signalk-distance-to-shore-world-coastline/releases/latest), unzip it, and point `signalk-charts-provider-simple` at the directory containing the `.mbtiles` file.
+Open the `signalk-charts-provider-simple` UI (`http://[your-server]:3000/plugins/signalk-charts-provider-simple/`), go to the **Download from URL** tab, and paste the URL of the latest release asset:
 
-The chart will be registered as `world-display-z0-z11-runtime-z12` in Signal K.
+```
+https://github.com/macjl/signalk-distance-to-shore-world-coastline/releases/latest/download/world-display-z0-z11-runtime-z12.mbtiles.zip
+```
+
+The plugin downloads the archive, extracts it, and registers the chart automatically. The chart will appear as `world-display-z0-z11-runtime-z12` in Signal K.
 
 **3. Install this plugin**
 
