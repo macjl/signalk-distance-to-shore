@@ -44,7 +44,7 @@ const COAST_Z12_X = 2048
 const COAST_Z12_Y = 2047
 
 test('findNearest with large radius finds coast correctly (hierarchy active)', async () => {
-  // 50 km radius → ~25 z12 tiles → hierarchy is activated (threshold = 16)
+  // 50 km radius → ~169 z12 tiles → hierarchy is activated (threshold = 25)
   const index = createChartResourceCoastIndex({
     resourceId: 'test-coastline',
     signalKBaseUrl: 'http://signalk.test',
