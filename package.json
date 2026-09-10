@@ -47,7 +47,7 @@
     "pbf": "^5.1.0"
   },
   "devDependencies": {
-    "geojson-vt": "^4.0.3",
+    "geojson-vt": "^5.0.2",
     "vt-pbf": "^3.1.3"
   },
   "signalk-plugin-enabled-by-default": false,
