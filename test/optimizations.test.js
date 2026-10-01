@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
 const zlib = require('node:zlib')
-const geojsonvt = require('geojson-vt').default
+const GeoJSONVT = require('geojson-vt').default
 const vtpbf = require('vt-pbf')
 const { createChartResourceCoastIndex } = require('../lib/coast-index')
 const { minDistanceToBboxMeters } = require('../lib/geo-distance')
@@ -155,7 +155,7 @@ test('findNearest does not activate hierarchy for small radius (below threshold)
 // coordinates will be wrong at coarse zooms, but segments.length > 0, which is
 // all the hierarchy needs to classify a tile as non-empty.
 function makeCoastTileData () {
-  const index = geojsonvt({
+  const index = new GeoJSONVT({
     type: 'FeatureCollection',
     features: [{
       type: 'Feature',

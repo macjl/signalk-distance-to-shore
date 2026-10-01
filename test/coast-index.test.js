@@ -5,7 +5,7 @@ const test = require('node:test')
 const os = require('node:os')
 const path = require('node:path')
 const zlib = require('node:zlib')
-const geojsonvt = require('geojson-vt').default
+const GeoJSONVT = require('geojson-vt').default
 const vtpbf = require('vt-pbf')
 const createPlugin = require('../index')
 const { createChartResourceCoastIndex } = require('../lib/coast-index')
@@ -232,7 +232,7 @@ function createChartProviderFetch () {
 }
 
 function createCoastlineMvtTile () {
-  const index = geojsonvt({
+  const index = new GeoJSONVT({
     type: 'FeatureCollection',
     features: [
       {
